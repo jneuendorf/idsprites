@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 from itertools import product
+from typing import Self
 
 import cv2
 import numpy as np
@@ -14,7 +15,7 @@ from sklearn.decomposition import PCA
 from torch.utils.data import Dataset, IterableDataset
 
 BaseFactors = namedtuple(
-    "BaseFactors", "color shape shape_id scale orientation position_x, position_y"
+    "BaseFactors", "color shape shape_id scale orientation position_x position_y"
 )
 
 
@@ -55,16 +56,27 @@ class Factors(BaseFactors):
 class InfiniteDSprites(IterableDataset):
     """Infinite dataset of procedurally generated shapes undergoing transformations."""
 
+    img_size: int
+    canvas_size: int
+    color_range: list[str]
+    scale_range: list[float]
+    orientation_range: list[float]
+    position_x_range: list[float]
+    position_y_range: list[float]
+    dataset_size: int | None
+    shapes: list[npt.NDArray] | None
+    # TODO: ...
+
     def __init__(
         self,
         img_size: int = 256,
-        color_range=None,
-        scale_range=None,
-        orientation_range=None,
-        position_x_range=None,
-        position_y_range=None,
-        dataset_size: int = None,
-        shapes: list = None,
+        color_range: list[str] | None = None,
+        scale_range: list[float] | None = None,
+        orientation_range: list[float] | None = None,
+        position_x_range: list[float] | None = None,
+        position_y_range: list[float] | None = None,
+        dataset_size: int | None = None,
+        shapes: list[npt.NDArray] | int = None,
         shape_ids: list = None,
         orientation_marker: bool = True,
         orientation_marker_color="black",
@@ -138,7 +150,7 @@ class InfiniteDSprites(IterableDataset):
         return self.shape_ids[self.current_shape_index]
 
     @classmethod
-    def from_config(cls, config: dict):
+    def from_config(cls, config: dict) -> Self:
         """Create a dataset from a config."""
         for key, value in config.items():
             if isinstance(value, dict) and set(value.keys()) == {
@@ -183,7 +195,12 @@ class InfiniteDSprites(IterableDataset):
                 yield img, factors
             self.current_shape_index += 1
 
-    def generate_shape(self):
+    def __len__(self):
+        if self.shapes is None:
+            raise TypeError("Infinite dataset has no length. Set 'shapes=<INT>'.")
+        return len(self.shapes)
+
+    def generate_shape(self) -> npt.NDArray:
         """Generate random vertices and connect them with straight lines or a smooth curve.
         Args:
             None
@@ -233,7 +250,7 @@ class InfiniteDSprites(IterableDataset):
 
     def interpolate(
         self, verts: npt.NDArray, k: int = 3, num_spline_points: int = 1000
-    ):
+    ) -> npt.NDArray:
         """Interpolate a set of vertices with a spline.
         Args:
             verts: An array of shape (2, num_verts).
