@@ -1,7 +1,9 @@
 """Class-incremental continual learning dataset."""
 
 from collections import Counter
+from collections.abc import Iterable, Generator
 from itertools import zip_longest
+from typing import Any, TypeVar
 
 import numpy as np
 from omegaconf import DictConfig
@@ -9,6 +11,7 @@ from torch.utils.data import Dataset, random_split
 
 from idsprites import ContinualDSpritesMap
 
+T = TypeVar("T")
 
 class ContinualBenchmark:
     def __init__(
@@ -24,7 +27,6 @@ class ContinualBenchmark:
             shapes: The list of shapes.
             exemplars: The list of exemplars.
             accumulate_test: Whether to accumulate the test dataset.
-            only_labels: Whether to only return shape labels.
         Returns:
             The continual learning benchmark.
         """
@@ -49,6 +51,8 @@ class ContinualBenchmark:
             cumulative_test = BalancedDataset(
                 self.test_dataset_size, self.img_size, self.shapes
             )
+        else:
+            raise NotImplementedError(f"iterating {type(self).__name__} not supported when accumulate_test=False")
         for task_shapes, task_shape_ids, task_exemplars in zip(
             self.grouper(self.shapes, self.shapes_per_task),
             self.grouper(self.shape_ids, self.shapes_per_task),
@@ -62,7 +66,7 @@ class ContinualBenchmark:
                 yield (train, val, test), task_exemplars
 
     @staticmethod
-    def grouper(iterable, n):
+    def grouper(iterable: Iterable[T], n) -> Generator[list[T], Any, None]:
         """Iterate in groups of n elements, e.g. grouper(3, 'ABCDEF') --> ABC DEF.
         Args:
             n: The number of elements per group.

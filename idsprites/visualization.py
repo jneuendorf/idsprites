@@ -34,17 +34,16 @@ COLORS = [
 
 def draw_batch(
     images,
-    path: Path = repo_root / "img/batch_grid.png",
     fig_height: float = 10,
     num_images: int = 16,
-    save: bool = True,
+    save_to: Path | None = repo_root / "img/batch_grid.png",
     show: bool = False,
 ):
     """Show a batch of images on a grid.
     Only the first n_max images are shown.
     Args:
         images: A numpy array of shape (N, C, H, W) or (N, H, W)
-        path: The path to save the image to
+        save_to: The path to save the image to
         fig_height: The height of the figure in inches
         num_images: The maximum number of images to show
         show: Whether to show the image
@@ -68,9 +67,9 @@ def draw_batch(
     for ax, img in zip(axes.flat, images[:num_images]):
         ax.imshow(img, cmap="Greys_r", aspect="equal")
 
-    if save:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(path, bbox_inches="tight")
+    if save_to:
+        save_to.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_to, bbox_inches="tight")
     if show:
         plt.show()
     buffer = io.BytesIO()

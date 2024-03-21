@@ -13,3 +13,4 @@ from idsprites.continual_benchmark import (
     ContinualBenchmark,
     ContinualBenchmarkRehearsal,
 )
+from idsprites import io
