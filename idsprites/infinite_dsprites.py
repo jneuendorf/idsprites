@@ -1,5 +1,5 @@
 """Class definitions for the infinite dSprites dataset."""
-
+from collections.abc import Iterator
 from itertools import product
 from typing import Self, NamedTuple
 
@@ -13,12 +13,7 @@ from scipy.interpolate import splev, splprep
 from sklearn.decomposition import PCA
 from torch.utils.data import Dataset, IterableDataset
 
-Floats = npt.NDArray[float] | list[float]
-Shape = npt.NDArray[float]
-
-# BaseFactors = namedtuple(
-#     "BaseFactors", "color shape shape_id scale orientation position_x position_y"
-# )
+from idsprites.types import Floats, Shape
 
 
 class Factors(NamedTuple):
@@ -79,21 +74,21 @@ class InfiniteDSprites(IterableDataset):
     # TODO: ...
 
     def __init__(
-            self,
-            img_size: int = 256,
-            color_range: list[str] | None = None,
-            scale_range: Floats | None = None,
-            orientation_range: Floats | None = None,
-            position_x_range: Floats | None = None,
-            position_y_range: Floats | None = None,
-            dataset_size: int | None = None,
-            shapes: list[Shape] = None,
-            shape_ids: list | None = None,
-            orientation_marker: bool = True,
-            orientation_marker_color="black",
-            background_color="darkgray",
-            grayscale: bool = False,
-            **kwargs,
+        self,
+        img_size: int = 256,
+        color_range: list[str] | None = None,
+        scale_range: Floats | None = None,
+        orientation_range: Floats | None = None,
+        position_x_range: Floats | None = None,
+        position_y_range: Floats | None = None,
+        dataset_size: int | None = None,
+        shapes: list[Shape] = None,
+        shape_ids: list | None = None,
+        orientation_marker: bool = True,
+        orientation_marker_color="black",
+        background_color="darkgray",
+        grayscale: bool = False,
+        **kwargs,
     ):
         """Create a dataset of images of random shapes.
         Args:
@@ -198,7 +193,7 @@ class InfiniteDSprites(IterableDataset):
                 shape = self.shapes[self.current_shape_index]
 
             for color, scale, orientation, position_x, position_y in product(
-                    *self.ranges.values()
+                *self.ranges.values()
             ):
                 if self.dataset_size is not None and self.counter >= self.dataset_size:
                     return
@@ -252,11 +247,11 @@ class InfiniteDSprites(IterableDataset):
         return shape
 
     def sample_vertex_positions(
-            self,
-            min_verts: int = 5,
-            max_verts: int = 8,
-            radius_std: float = 0.4,
-            angle_std: float = 0.5,
+        self,
+        min_verts: int = 5,
+        max_verts: int = 8,
+        radius_std: float = 0.4,
+        angle_std: float = 0.5,
     ):
         """Sample the positions of the vertices of a polygon.
         Args:
@@ -282,7 +277,7 @@ class InfiniteDSprites(IterableDataset):
         return verts
 
     def interpolate(
-            self, verts: npt.NDArray, k: int = 3, num_spline_points: int = 1000
+        self, verts: npt.NDArray, k: int = 3, num_spline_points: int = 1000
     ) -> npt.NDArray:
         """Interpolate a set of vertices with a spline.
         Args:
@@ -326,7 +321,7 @@ class InfiniteDSprites(IterableDataset):
         self.draw_shape(shape=transformed_shape, canvas=canvas, color=(255, 255, 255))
         center = self.get_center(canvas)[::-1]
         center = np.expand_dims(center - self.canvas_size // 2, 1) / (
-                self.scale_factor * self.canvas_size
+            self.scale_factor * self.canvas_size
         )
         shape = shape - center
 
@@ -491,16 +486,13 @@ class InfiniteDSprites(IterableDataset):
 class InfiniteDSpritesFactors(InfiniteDSprites):
     """Only return the factors."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Factors]:
         """Generate an infinite stream of factors with shape set to None."""
         while True:
             if self.shapes is not None and self.current_shape_index >= len(self.shapes):
                 return
             for color, scale, orientation, position_x, position_y in product(
-                    *self.ranges.values()
+                *self.ranges.values()
             ):
                 if self.dataset_size is not None and self.counter >= self.dataset_size:
                     return
@@ -518,17 +510,21 @@ class InfiniteDSpritesFactors(InfiniteDSprites):
             self.current_shape_index += 1
 
 
-class ContinualDSpritesMap(Dataset):
+class ContinualDSpritesMap(Dataset[tuple[Floats, Factors]]):
     """Map-style (finite) continual learning dsprites dataset."""
 
     def __init__(self, *args, **kwargs):
         self.dataset = InfiniteDSpritesFactors(*args, **kwargs)
         assert (
-                self.dataset.dataset_size is not None or self.dataset.shapes is not None
+            self.dataset.dataset_size is not None or self.dataset.shapes is not None
         ), "Dataset size must be finite. Please set dataset_size or pass a list of shapes."
         self.data: list[Factors] = list(self.dataset)
         self.y_transform = kwargs.get("y_transform", lambda y: y)
         self.x_transform = kwargs.get("x_transform", lambda x: x)
+
+    @property
+    def factors(self) -> list[Factors]:
+        return list(self.data)
 
     @property
     def targets(self):
@@ -537,7 +533,7 @@ class ContinualDSpritesMap(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> tuple[Floats, Factors]:
         shape_index = self.data[index].shape_id
         if self.dataset.shape_ids is not None:
             shape_index = self.dataset.shape_ids.index(shape_index)
@@ -585,7 +581,7 @@ class RandomDSpritesMap(Dataset):
     def __init__(self, *args, **kwargs) -> None:
         self.dataset = RandomDSprites(*args, **kwargs)
         assert (
-                self.dataset.dataset_size is not None
+            self.dataset.dataset_size is not None
         ), "Dataset size must be finite. Please set dataset_size."
         self.data, self.factors = zip(*list(self.dataset))
         self.data = list(self.data)
@@ -622,7 +618,7 @@ class InfiniteDSpritesTriplets(InfiniteDSprites):
             factors_original = self.sample_factors()
             factors_transformed = self.sample_factors()
             if action != "shape" and np.allclose(
-                    factors_original[action], factors_transformed[action]
+                factors_original[action], factors_transformed[action]
             ):
                 continue
             self.counter += 1

@@ -1,24 +1,42 @@
 """Class-incremental continual learning dataset."""
-
+from abc import ABC, abstractmethod
 from collections import Counter
-from collections.abc import Iterable, Generator
+from collections.abc import Iterable, Generator, Iterator
 from itertools import zip_longest
-from typing import Any, TypeVar
+from typing import Any, TypeVar, Generic
 
 import numpy as np
 from omegaconf import DictConfig
 from torch.utils.data import Dataset, random_split
 
 from idsprites import ContinualDSpritesMap
+from idsprites.infinite_dsprites import Factors
+from idsprites.types import Subset, Shape, Exemplar
 
 T = TypeVar("T")
+TRAIN = TypeVar('TRAIN', bound=Dataset)
+VAL = TypeVar('VAL', bound=Dataset)
+TEST = TypeVar('TEST', bound=Dataset)
+ImgFactorDataset = Dataset[tuple[Shape, Factors]]
+SpritesSplit = Subset[ContinualDSpritesMap]
 
-class ContinualBenchmark:
+
+# TODO: Variadic Generics (see https://peps.python.org/pep-0646/#summary-examples)
+class BaseContinualBenchmark(
+    Generic[TRAIN, VAL, TEST],
+    ABC,
+):
+    @abstractmethod
+    def __iter__(self) -> Iterator[tuple[tuple[TRAIN, VAL, TEST], list[Exemplar]]]:
+        ...
+
+
+class ContinualBenchmark(BaseContinualBenchmark[ImgFactorDataset, ImgFactorDataset, ImgFactorDataset]):
     def __init__(
         self,
         cfg: DictConfig,
-        shapes: list,
-        exemplars: list,
+        shapes: list[Shape],
+        exemplars: list[Shape],
         accumulate_test: bool = True,
     ):
         """Initialize the continual learning benchmark.
@@ -52,7 +70,8 @@ class ContinualBenchmark:
                 self.test_dataset_size, self.img_size, self.shapes
             )
         else:
-            raise NotImplementedError(f"iterating {type(self).__name__} not supported when accumulate_test=False")
+            raise NotImplementedError(
+                f"iterating {type(self).__name__} not supported when accumulate_test=False")
         for task_shapes, task_shape_ids, task_exemplars in zip(
             self.grouper(self.shapes, self.shapes_per_task),
             self.grouper(self.shape_ids, self.shapes_per_task),
@@ -77,7 +96,7 @@ class ContinualBenchmark:
         args = [iter(iterable)] * n
         return (list(group) for group in zip_longest(*args))
 
-    def build_datasets(self, shapes: list, shape_ids: list):
+    def build_datasets(self, shapes: list, shape_ids: list) -> tuple[SpritesSplit, SpritesSplit, SpritesSplit]:
         """Build data loaders for a class-incremental continual learning scenario."""
         n = self.factor_resolution
         scale_range = np.linspace(0.5, 1.0, n)
@@ -195,9 +214,8 @@ class BalancedDataset:
         self.seen_class_counts = Counter()
         self.full_classes = set()
 
-    def update(self, task_dataset: Dataset) -> None:
+    def update(self, task_dataset: Subset[ContinualDSpritesMap]) -> None:
         task_data = [task_dataset.dataset.data[idx] for idx in task_dataset.indices]
-
         for factors in task_data:
             shape_id = factors.shape_id
             if len(self.dataset) < self.max_size:

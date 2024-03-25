@@ -9,7 +9,7 @@ from torch.utils.data import random_split
 from tqdm.contrib.concurrent import process_map
 
 import idsprites as ids
-from idsprites.infinite_dsprites import Shape
+from idsprites.types import Shape
 
 grouper = ids.ContinualBenchmark.grouper
 
