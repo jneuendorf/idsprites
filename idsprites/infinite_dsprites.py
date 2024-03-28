@@ -1,7 +1,7 @@
 """Class definitions for the infinite dSprites dataset."""
 from collections.abc import Iterator
 from itertools import product
-from typing import Self, NamedTuple
+from typing import Self, NamedTuple, Type
 
 import cv2
 import numpy as np
@@ -29,30 +29,62 @@ class Factors(NamedTuple):
     # def __getitem__(self, key):
     #     return getattr(self, key)
 
-    def to_tensor(self, **kwargs) -> torch.Tensor:
-        """Convert the factors to a tensor."""
-        # return Factors(
-        #     color=torch.tensor(self.color, **kwargs),
-        #     shape=torch.tensor(self.shape, **kwargs),
-        #     shape_id=torch.tensor(self.shape_id, **kwargs),
-        #     scale=torch.tensor(self.scale, **kwargs),
-        #     orientation=torch.tensor(self.orientation, **kwargs),
-        #     position_x=torch.tensor(self.position_x, **kwargs),
-        #     position_y=torch.tensor(self.position_y, **kwargs),
-        # )
-        ...
+    def to_tensor(
+        self,
+        dtype: torch.dtype = torch.float32,
+        device: str | torch.device | int | None = None,
+        requires_grad: bool = False,
+        pin_memory: bool = False
+    ) -> "TensorFactors":
+        """Convert the factors to a tensor.
 
-    # def to(self, *args, **kwargs):
-    #     """Move the factors to a device."""
-    #     return Factors(
-    #         color=self.color.to(*args, **kwargs),
-    #         shape=self.shape.to(*args, **kwargs),
-    #         shape_id=self.shape_id.to(*args, **kwargs),
-    #         scale=self.scale.to(*args, **kwargs),
-    #         orientation=self.orientation.to(*args, **kwargs),
-    #         position_x=self.position_x.to(*args, **kwargs),
-    #         position_y=self.position_y.to(*args, **kwargs),
-    #     )
+        :param dtype: The data type of all factors except 'shape_id'
+            which is always 'torch.long'.
+        :param device: Same as for 'torch.tensor'
+        :param requires_grad: Same as for 'torch.tensor'
+        :param pin_memory: Same as for 'torch.tensor'
+        """
+        kwargs = dict(
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+            pin_memory=pin_memory,
+        )
+        shape_id_kwargs = {**kwargs, "dtype": torch.long}
+        return TensorFactors(
+            color=torch.tensor(self.color, **kwargs),
+            shape=torch.tensor(self.shape, **kwargs),
+            shape_id=torch.tensor(self.shape_id, **shape_id_kwargs),
+            scale=torch.tensor(self.scale, **kwargs),
+            orientation=torch.tensor(self.orientation, **kwargs),
+            position_x=torch.tensor(self.position_x, **kwargs),
+            position_y=torch.tensor(self.position_y, **kwargs),
+        )
+
+    def replace(self, **kwargs):
+        return self._replace(**kwargs)
+
+
+class TensorFactors(NamedTuple):
+    color: torch.Tensor
+    shape: torch.Tensor
+    shape_id: torch.Tensor
+    scale: torch.Tensor
+    orientation: torch.Tensor
+    position_x: torch.Tensor
+    position_y: torch.Tensor
+
+    def to(self, *args, **kwargs):
+        """``torch.Tensor.to`` for all factors."""
+        return TensorFactors(
+            color=self.color.to(*args, **kwargs),
+            shape=self.shape.to(*args, **kwargs),
+            shape_id=self.shape_id.to(*args, **kwargs),
+            scale=self.scale.to(*args, **kwargs),
+            orientation=self.orientation.to(*args, **kwargs),
+            position_x=self.position_x.to(*args, **kwargs),
+            position_y=self.position_y.to(*args, **kwargs),
+        )
 
     def replace(self, **kwargs):
         return self._replace(**kwargs)
@@ -607,7 +639,8 @@ class InfiniteDSpritesTriplets(InfiniteDSprites):
         super().__init__(*args, **kwargs)
 
     def __iter__(self):
-        """Generate an infinite stream of tuples consisting of a triplet of images and an action encoding.
+        """Generate an infinite stream of tuples consisting of a triplet of images
+        and an action encoding.
         Args:
             None
         Yields:
