@@ -1,7 +1,7 @@
 """Class definitions for the infinite dSprites dataset."""
 from collections.abc import Iterator
 from itertools import product
-from typing import Self, NamedTuple, Type
+from typing import Self, NamedTuple
 
 import cv2
 import numpy as np
