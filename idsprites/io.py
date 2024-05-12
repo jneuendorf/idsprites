@@ -1,6 +1,7 @@
 import dataclasses
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, Literal
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -9,7 +10,8 @@ from torch.utils.data import random_split
 from tqdm.contrib.concurrent import process_map
 
 import idsprites as ids
-from idsprites.types import Shape
+from idsprites import Factors
+from idsprites.types import Shape, Floats, Subset
 
 grouper = ids.ContinualBenchmark.grouper
 
@@ -31,13 +33,40 @@ class Task:
     dir: Path
     exemplars: list[Shape] = field(default_factory=list)
     shapes: list[Shape] = field(default_factory=list)
-    shape_ids: list[int] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.ensure_dirs()
 
     def write_shapes(self) -> None:
         np.save(self.dir / "shapes.npy", self.shapes)
 
-    def write_split(self, split, subdir: Path) -> None:
-        self.ensure_dirs()
+    def write_exemplars(self) -> None:
+        for i, exemplar in enumerate(self.exemplars):
+            exemplar_img = to_image(exemplar)
+            exemplar_img.save(self.exemplars_dir / f"exemplar_{i}.png")
+
+    def write_split(
+        self,
+        name: Literal["train", "val", "test"],
+        split: Iterable[tuple[Floats, Factors]],
+    ) -> None:
+        subdir = getattr(self, f"{name}_dir")
+        split_factors = []
+        labels = []
+        for i, (image, factors) in enumerate(split):
+            image: Floats
+            factors: Factors
+
+            split_factors.append(factors.replace(shape=None))
+            path = subdir / f"sample_{i}.png"
+            to_image(image).save(path)
+            labels.append(f"{path.name} {factors.shape_id}")
+        # split_factors = ids.Factors(*zip(*split_factors))
+        np.savez(
+            subdir / "factors.npz",
+            **ids.Factors(*zip(*split_factors))._asdict(),
+        )
+        (subdir / "labels.txt").write_text("\n".join(labels))
 
     @property
     def exemplars_dir(self):
@@ -114,7 +143,7 @@ def write_task_files(task_id, task_shapes, task_shape_ids, task_exemplars, args:
     """Writes all files related to task 'task_id' to 'args.out_dir'.
 
     Non-image files:
-    - shapes.npy: asdf
+    - shapes.npy
     - */factors.npz
     - */labels.txt
 
@@ -137,10 +166,6 @@ def write_task_files(task_id, task_shapes, task_shape_ids, task_exemplars, args:
         └── sample_*.png
     """
     task_dir = args.out_dir / f"task_{task_id + 1}"
-    exemplars_dir = task_dir / "exemplars"
-    train_dir = task_dir / "train"
-    val_dir = task_dir / "val"
-    test_dir = task_dir / "test"
 
     if not args.overwrite and task_dir.exists():
         return
@@ -149,36 +174,18 @@ def write_task_files(task_id, task_shapes, task_shape_ids, task_exemplars, args:
         task_dir,
         exemplars=task_exemplars,
         shapes=task_shapes,
-        shape_ids=task_shape_ids,
     )
     task.write_shapes()
-
-    # for subdir in [exemplars_dir, train_dir, val_dir, test_dir]:
-    #     subdir.mkdir(parents=True, exist_ok=True)
-
-    # np.save(task_dir / "shapes.npy", task_shapes)
-    for i, exemplar in enumerate(task_exemplars):
-        exemplar = to_image(exemplar)
-        exemplar.save(exemplars_dir / f"exemplar_{i}.png")
+    task.write_exemplars()
 
     dataset = create_continual_dsprites(args, task_shapes, task_shape_ids)
-
     train, val, test = random_split(
-        dataset, [args.train_split, args.val_split, args.test_split]
+        dataset,
+        lengths=[args.train_split, args.val_split, args.test_split],
     )
-    for split, subdir in zip([train, val, test], [train_dir, val_dir, test_dir]):
-        split_factors = []
-        labels = []
-        for i, (image, factors) in enumerate(split):
-            split_factors.append(factors.replace(shape=None))
-            image = to_image(image)
-            path = subdir / f"sample_{i}.png"
-            image.save(path)
-            labels.append(f"{path.name} {factors.shape_id}")
-        split_factors = ids.Factors(*zip(*split_factors))
-        np.savez(subdir / "factors.npz", **split_factors._asdict())
-        with open(subdir / "labels.txt", "w") as f:
-            f.write("\n".join(labels))
+    task.write_split(name="train", split=train)
+    task.write_split(name="val", split=val)
+    task.write_split(name="test", split=test)
 
 
 def create_continual_dsprites(args, task_shapes, task_shape_ids):
