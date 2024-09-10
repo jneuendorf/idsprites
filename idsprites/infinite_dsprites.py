@@ -1,5 +1,5 @@
 """Class definitions for the infinite dSprites dataset."""
-from collections.abc import Iterator
+from collections.abc import Iterator, Iterable
 from itertools import product
 from typing import Self, NamedTuple
 
@@ -108,11 +108,11 @@ class InfiniteDSprites(IterableDataset):
     def __init__(
         self,
         img_size: int = 256,
-        color_range: list[str] | None = None,
-        scale_range: Floats | None = None,
-        orientation_range: Floats | None = None,
-        position_x_range: Floats | None = None,
-        position_y_range: Floats | None = None,
+        color_range: Iterable[str] | None = None,
+        scale_range: Iterable[float | int] | None = None,
+        orientation_range: Iterable[float | int] | None = None,
+        position_x_range: Iterable[float | int] | None = None,
+        position_y_range: Iterable[float | int] | None = None,
         dataset_size: int | None = None,
         shapes: list[Shape] = None,
         shape_ids: list | None = None,
